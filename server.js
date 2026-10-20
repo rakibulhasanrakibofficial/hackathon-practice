@@ -1,130 +1,191 @@
 
 const express = require("express");
+const path = require("path");
+const fs = require("fs");
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-app.use(express.json());
-app.use(express.static(__dirname));
+const API_URL = "https://openrouter.ai/api/v1/chat/completions";
+const MODEL =
+  process.env.OPENROUTER_MODEL ||
+  "google/gemma-4-26b-a4b-it:free";
 
-app.get("/api/health", (req, res) => {
-  res.json({ status: "OK", message: "Backend is running!" });
+const API_KEY = process.env.OPENROUTER_API_KEY;
+
+// Support either public/index.html or index.html in the project root.
+const publicDir = fs.existsSync(path.join(__dirname, "public", "index.html"))
+  ? path.join(__dirname, "public")
+  : __dirname;
+
+app.use(express.json({ limit: "100kb" }));
+
+// If the frontend is in the project root, don't serve backend/config files.
+app.use((req, res, next) => {
+  if (
+    req.path.startsWith("/.") ||
+    ["/server.js", "/package.json", "/package-lock.json"].includes(req.path) ||
+    req.path.startsWith("/node_modules/")
+  ) {
+    return res.sendStatus(404);
+  }
+  next();
+});
+
+app.use(express.static(publicDir));
+
+app.get("/api/health", (_req, res) => {
+  res.json({
+    ok: true,
+    provider: "OpenRouter",
+    model: MODEL
+  });
 });
 
 app.post("/api/chat", async (req, res) => {
+  if (!API_KEY) {
+    return res.status(500).json({
+      error: "Server configuration error: OPENROUTER_API_KEY is missing."
+    });
+  }
+
+  // Support common frontend request formats.
+  const userMessage =
+    typeof req.body?.message === "string"
+      ? req.body.message
+      : typeof req.body?.prompt === "string"
+        ? req.body.prompt
+        : typeof req.body?.messages?.[req.body.messages.length - 1]?.content === "string"
+          ? req.body.messages[req.body.messages.length - 1].content
+          : "";
+
+  if (!userMessage.trim()) {
+    return res.status(400).json({
+      error: "Please enter a message."
+    });
+  }
+
+  if (userMessage.length > 20000) {
+    return res.status(413).json({
+      error: "Message is too long. Please use shorter text."
+    });
+  }
+
+  let upstream;
+
   try {
-    const { question } = req.body || {};
-
-    if (typeof question !== "string" || !question.trim()) {
-      return res.status(400).json({ error: "Please enter a question." });
-    }
-
-    const response = await fetch("http://localhost:11434/api/chat", {
+    upstream = await fetch(API_URL, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${API_KEY}`,
+        "Content-Type": "application/json"
+      },
       body: JSON.stringify({
-        model: "gemma4:e2b",
+        model: MODEL,
+        stream: true,
         messages: [
           {
             role: "system",
             content:
-              "You are a helpful hackathon assistant. Answer directly in simple language, using 2-3 short sentences unless more detail is needed."
+              "You are a helpful AI assistant. Give accurate, clear, concise answers. If asked to summarize notes, use the supplied notes and do not invent facts."
           },
           {
             role: "user",
-            content: question.trim()
+            content: userMessage.trim()
           }
         ],
-        stream: true,
-        think: false,
-        keep_alive: "30m",
-        options: {
-          num_predict: 80,
-          temperature: 0.2
-        }
+        max_tokens: 500,
+        temperature: 0.2
       }),
-      signal: AbortSignal.timeout(120000)
+      signal: AbortSignal.timeout(90000)
     });
 
-    if (!response.ok || !response.body) {
-      const details = await response.text();
-      console.error("Ollama error:", details);
-      return res.status(502).json({ error: "Ollama request failed." });
+    if (!upstream.ok) {
+      const detail = await upstream.text();
+      console.error("OpenRouter error:", upstream.status, detail);
+
+      return res.status(502).json({
+        error:
+          upstream.status === 429
+            ? "The AI provider rate limit was reached. Please wait and try again."
+            : "The hosted AI request failed. Check the model availability and API configuration."
+      });
+    }
+
+    if (!upstream.body) {
+      return res.status(502).json({
+        error: "The AI provider returned no response stream."
+      });
     }
 
     res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
     res.setHeader("Cache-Control", "no-cache, no-transform");
     res.setHeader("Connection", "keep-alive");
-    res.flushHeaders();
+    res.flushHeaders?.();
 
-    const reader = response.body.getReader();
+    const reader = upstream.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
 
     while (true) {
       const { value, done } = await reader.read();
-
-      buffer += decoder.decode(value || new Uint8Array(), {
-        stream: !done
-      });
-
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      for (const line of lines) {
-        if (!line.trim()) continue;
-
-        try {
-          const item = JSON.parse(line);
-          const token = item.message?.content || "";
-
-          if (token) {
-            res.write(`data: ${JSON.stringify({ token })}\n\n`);
-          }
-
-          if (item.error) {
-            res.write(`data: ${JSON.stringify({ error: item.error })}\n\n`);
-          }
-
-          if (item.done) {
-            res.write("data: [DONE]\n\n");
-          }
-        } catch (error) {
-          console.error("Invalid Ollama chunk:", error.message);
-        }
-      }
-
       if (done) break;
-    }
 
-    if (buffer.trim()) {
-      try {
-        const item = JSON.parse(buffer);
-        const token = item.message?.content || "";
+      buffer += decoder.decode(value, { stream: true });
 
-        if (token) {
+      const events = buffer.split("\n\n");
+      buffer = events.pop() || "";
+
+      for (const event of events) {
+        const line = event
+          .split("\n")
+          .find((item) => item.startsWith("data:"));
+
+        if (!line) continue;
+
+        const raw = line.slice(5).trim();
+        if (raw === "[DONE]") continue;
+
+        let chunk;
+        try {
+          chunk = JSON.parse(raw);
+        } catch {
+          continue;
+        }
+
+        if (chunk.error) {
+          console.error("OpenRouter stream error:", chunk.error);
+          continue;
+        }
+
+        const token = chunk.choices?.[0]?.delta?.content;
+        if (typeof token === "string" && token.length > 0) {
           res.write(`data: ${JSON.stringify({ token })}\n\n`);
         }
-      } catch (error) {
-        console.error("Final chunk error:", error.message);
       }
     }
 
+    res.write("data: [DONE]\n\n");
     res.end();
   } catch (error) {
-    console.error("Chat error:", error.message);
+    console.error("Chat request failed:", error.message);
 
-    if (!res.headersSent) {
-      res.status(500).json({
-        error: "AI request failed: " + error.message
-      });
-    } else {
-      res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
-      res.end();
+    if (res.headersSent) {
+      res.write(
+        `data: ${JSON.stringify({
+          error: "The AI connection ended unexpectedly. Please try again."
+        })}\n\n`
+      );
+      return res.end();
     }
+
+    return res.status(502).json({
+      error: "Could not reach the hosted AI service. Please try again."
+    });
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`AI provider: OpenRouter | Model: ${MODEL}`);
 });
