@@ -2,83 +2,324 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#f7f7ff" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f5f3ff">
   <title>Rakib's AI Assistant</title>
-  <link rel="stylesheet" href="style.css" />
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      padding: 20px;
+      font-family: "Segoe UI", Arial, sans-serif;
+      color: #24213d;
+      background:
+        radial-gradient(circle at top left, #e9e3ff, transparent 40%),
+        radial-gradient(circle at bottom right, #dff5ff, transparent 40%),
+        #f7f7fc;
+    }
+
+    .app {
+      width: min(100%, 950px);
+      min-height: calc(100vh - 40px);
+      margin: auto;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: rgba(255,255,255,.94);
+      border: 1px solid #fff;
+      border-radius: 25px;
+      box-shadow: 0 20px 70px #4d399a18;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 20px 25px;
+      border-bottom: 1px solid #eeebf7;
+    }
+
+    .brand { display: flex; align-items: center; gap: 13px; }
+
+    .logo {
+      width: 48px;
+      height: 48px;
+      display: grid;
+      place-items: center;
+      border-radius: 16px;
+      color: white;
+      font-size: 24px;
+      font-weight: 800;
+      background: linear-gradient(135deg, #9375ff, #5734d4);
+      box-shadow: 0 6px 18px #7353dc40;
+    }
+
+    h1 { margin: 0; font-size: 19px; }
+    .subtitle { margin: 5px 0 0; color: #89859f; font-size: 12px; }
+
+    button, textarea { font: inherit; }
+    button { cursor: pointer; }
+
+    .clear {
+      padding: 10px 14px;
+      color: #6f6590;
+      background: white;
+      border: 1px solid #e9e5f4;
+      border-radius: 12px;
+    }
+
+    .clear:hover { background: #f5f0ff; }
+
+    main {
+      width: min(100%, 720px);
+      flex: 1;
+      margin: 0 auto;
+      padding: 30px 22px;
+    }
+
+    .welcome { text-align: center; padding: 24px 0 32px; }
+
+    .sparkle {
+      width: 65px;
+      height: 65px;
+      display: grid;
+      place-items: center;
+      margin: 0 auto 20px;
+      border-radius: 22px;
+      color: #714ce6;
+      font-size: 34px;
+      background: linear-gradient(135deg, #f0eaff, #e7edff);
+    }
+
+    .welcome h2 { margin: 0; font-size: 30px; }
+    .welcome p {
+      max-width: 460px;
+      margin: 12px auto 25px;
+      color: #85819b;
+      line-height: 1.8;
+      font-size: 14px;
+    }
+
+    .suggestions {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      text-align: left;
+    }
+
+    .suggestion {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 15px 12px;
+      background: white;
+      border: 1px solid #eeeaf7;
+      border-radius: 15px;
+      transition: .2s;
+    }
+
+    .suggestion:hover {
+      border-color: #bfb0ff;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px #5940a010;
+    }
+
+    .symbol {
+      width: 38px;
+      height: 38px;
+      flex-shrink: 0;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      color: #704ce2;
+      background: #f0ebff;
+      font-weight: bold;
+    }
+
+    .suggestion b, .suggestion small { display: block; }
+    .suggestion b { font-size: 12px; color: #34304c; }
+    .suggestion small { margin-top: 5px; font-size: 10px; color: #9994ac; }
+
+    #messages { display: flex; flex-direction: column; gap: 18px; }
+
+    .message { display: flex; gap: 9px; align-items: flex-start; }
+    .message.user { justify-content: flex-end; }
+
+    .avatar {
+      flex-shrink: 0;
+      width: 31px;
+      height: 31px;
+      display: grid;
+      place-items: center;
+      border-radius: 10px;
+      color: #704ce2;
+      background: #eee8ff;
+      font-weight: bold;
+    }
+
+    .bubble {
+      max-width: 85%;
+      padding: 13px 16px;
+      border-radius: 16px;
+      font-size: 14px;
+      line-height: 1.7;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .assistant .bubble {
+      background: #f2f1f9;
+      border-top-left-radius: 5px;
+    }
+
+    .user .bubble {
+      color: white;
+      background: linear-gradient(135deg, #8060ef, #5c3bd6);
+      border-top-right-radius: 5px;
+    }
+
+    footer {
+      width: min(100%, 760px);
+      margin: 0 auto;
+      padding: 0 20px 20px;
+    }
+
+    form {
+      padding: 12px 13px;
+      border: 1px solid #e4def5;
+      border-radius: 18px;
+      background: white;
+      transition: .2s;
+    }
+
+    form:focus-within {
+      border-color: #b9a9ff;
+      box-shadow: 0 0 0 4px #7655e912;
+    }
+
+    textarea {
+      display: block;
+      width: 100%;
+      min-height: 43px;
+      max-height: 140px;
+      padding: 8px 5px;
+      resize: none;
+      border: 0;
+      outline: none;
+      color: #24213d;
+      background: transparent;
+    }
+
+    textarea::placeholder { color: #aaa5bc; }
+
+    .bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .status { color: #9690aa; font-size: 11px; }
+
+    .send {
+      padding: 11px 18px;
+      border: 0;
+      border-radius: 12px;
+      color: white;
+      font-weight: 700;
+      background: linear-gradient(135deg, #8060ef, #5b3bd4);
+      box-shadow: 0 5px 14px #7655e92b;
+    }
+
+    .send:disabled { opacity: .55; cursor: wait; }
+
+    .hint {
+      margin: 11px 0 0;
+      color: #aaa5bb;
+      text-align: center;
+      font-size: 10px;
+    }
+
+    @media (max-width: 520px) {
+      body { padding: 0; }
+      .app { min-height: 100vh; border-radius: 0; }
+      header { padding: 16px 12px; }
+      h1 { font-size: 14px; }
+      .subtitle { font-size: 10px; }
+      .logo { width: 40px; height: 40px; }
+      .clear { padding: 8px; font-size: 11px; }
+      main { padding: 20px 12px; }
+      .welcome h2 { font-size: 25px; }
+      .suggestions { gap: 8px; }
+      .suggestion { padding: 10px 7px; gap: 7px; }
+      .symbol { width: 30px; height: 30px; }
+      .suggestion b { font-size: 10px; }
+      .suggestion small { font-size: 9px; }
+      footer { padding: 0 10px 14px; }
+    }
+  </style>
 </head>
+
 <body>
-  <div class="app-shell">
-    <header class="topbar">
-      <a class="brand" href="#">
-        <div class="brand-logo">R</div>
+  <div class="app">
+    <header>
+      <div class="brand">
+        <div class="logo">R</div>
         <div>
           <h1>Rakib's AI Assistant</h1>
-          <p>Your personal AI companion</p>
+          <p class="subtitle">Your personal AI companion</p>
         </div>
-      </a>
-      <button id="clearChat" class="clear-btn">↻ Clear Chat</button>
+      </div>
+      <button class="clear" id="clearChat" type="button">Clear Chat</button>
     </header>
 
-    <main class="chat-area" id="chatArea">
+    <main>
       <section class="welcome" id="welcome">
-        <div class="hero-icon">✦</div>
-        <p class="eyebrow">YOUR PERSONAL AI</p>
-        <h2>Hello, welcome! <span>👋</span></h2>
-        <p class="welcome-text">
-          I'm here to help you learn, create, and solve problems.
-          What would you like to explore today?
-        </p>
+        <div class="sparkle">✦</div>
+        <h2>কী জানতে চাও?</h2>
+        <p>তোমার প্রশ্ন লেখো। আমি তোমাকে উত্তর দিতে সাহায্য করব। বাংলা বা ইংরেজি—দুই ভাষাতেই প্রশ্ন করতে পারো।</p>
 
         <div class="suggestions">
-          <button class="suggestion" data-prompt="Explain a difficult topic in simple words">
-            <span class="suggestion-icon purple">✧</span>
-            <span><b>Learn something</b><small>Understand any topic</small></span>
-            <span class="suggestion-arrow">↗</span>
+          <button class="suggestion" data-prompt="Explain a topic in simple words">
+            <span class="symbol">✧</span>
+            <span><b>সাধারণ প্রশ্ন</b><small>যেকোনো বিষয়ে জানো</small></span>
           </button>
-          <button class="suggestion" data-prompt="Help me write clean JavaScript code">
-            <span class="suggestion-icon blue">&lt;/&gt;</span>
-            <span><b>Write some code</b><small>Build and debug projects</small></span>
-            <span class="suggestion-arrow">↗</span>
+          <button class="suggestion" data-prompt="Help me write and debug JavaScript code">
+            <span class="symbol">&lt;/&gt;</span>
+            <span><b>কোডিং সাহায্য</b><small>Code, Debug, Explain</small></span>
           </button>
-          <button class="suggestion" data-prompt="Give me a step-by-step explanation of an idea">
-            <span class="suggestion-icon pink">☷</span>
-            <span><b>Explain an idea</b><small>Step-by-step guidance</small></span>
-            <span class="suggestion-arrow">↗</span>
+          <button class="suggestion" data-prompt="Explain a difficult concept step by step">
+            <span class="symbol">◇</span>
+            <span><b>ধারণা বুঝতে</b><small>সহজভাবে ব্যাখ্যা</small></span>
           </button>
           <button class="suggestion" data-prompt="Help me brainstorm creative ideas">
-            <span class="suggestion-icon orange">✳</span>
-            <span><b>Get creative</b><small>Explore new possibilities</small></span>
-            <span class="suggestion-arrow">↗</span>
+            <span class="symbol">✳</span>
+            <span><b>নতুন আইডিয়া</b><small>সৃজনশীল চিন্তা</small></span>
           </button>
         </div>
       </section>
 
-      <div id="messages" class="messages" aria-live="polite"></div>
+      <div id="messages" aria-live="polite"></div>
     </main>
 
-    <footer class="composer-wrap">
-      <form id="chatForm" class="composer">
-        <textarea
-          id="messageInput"
-          rows="1"
-          maxlength="4000"
-          placeholder="Ask me anything..."
-          aria-label="Your message"
-          required
-        ></textarea>
-        <div class="composer-bottom">
-          <span class="input-hint"><span class="online-dot"></span> Ready to help</span>
-          <button id="sendBtn" type="submit" class="send-btn">
-            Send <span>↑</span>
-          </button>
+    <footer>
+      <form id="chatForm">
+        <textarea id="messageInput" rows="1" maxlength="4000"
+          placeholder="এখানে প্রশ্ন লেখো..." aria-label="তোমার প্রশ্ন" required></textarea>
+        <div class="bottom">
+          <span class="status">✦ Ready to help</span>
+          <button class="send" id="sendBtn" type="submit">Send ↑</button>
         </div>
       </form>
-      <p class="keyboard-hint">Enter to send · Shift + Enter for a new line</p>
+      <p class="hint">Enter দিয়ে Send করো · নতুন লাইনের জন্য Shift + Enter</p>
     </footer>
   </div>
 
-  <script src="app.js"></script>
+  <script src="ai.js"></script>
 </body>
 </html>
