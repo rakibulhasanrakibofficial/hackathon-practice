@@ -1,0 +1,75 @@
+
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>My AI Assistant</title>
+</head>
+<body>
+  <h1>My AI Assistant</h1>
+
+  <input id="question" placeholder="তোমার প্রশ্ন লেখো">
+  <button id="askBtn">AI-কে জিজ্ঞেস করো</button>
+
+  <p id="status"></p>
+  <div id="answer"></div>
+
+  <script>
+    const button = document.getElementById("askBtn");
+    const questionInput = document.getElementById("question");
+    const status = document.getElementById("status");
+    const answer = document.getElementById("answer");
+
+    button.addEventListener("click", async function () {
+      const question = questionInput.value.trim();
+
+      if (!question) {
+        status.textContent = "আগে একটি প্রশ্ন লেখো।";
+        return;
+      }
+
+      status.textContent = "Gemma উত্তর তৈরি করছে...";
+      answer.textContent = "";
+      button.disabled = true;
+
+      try {
+        const response = await fetch(
+          "http://localhost:11434/api/chat",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              model: "gemma4:e2b",
+              messages: [
+                {
+                  role: "user",
+                  content: question
+                }
+              ],
+              stream: false
+            })
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error("HTTP Error: " + response.status);
+        }
+
+        const data = await response.json();
+
+        answer.textContent = data.message.content;
+        status.textContent = "উত্তর পাওয়া গেছে!";
+
+      } catch (error) {
+        status.textContent =
+          "সমস্যা হয়েছে: " + error.message;
+      } finally {
+        button.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
